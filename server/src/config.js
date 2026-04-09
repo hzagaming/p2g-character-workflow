@@ -4,6 +4,7 @@ const dotenv = require("dotenv");
 dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 
 const projectRoot = path.resolve(__dirname, "../..");
+const isWindows = process.platform === "win32";
 
 function resolvePath(value, fallback) {
   const raw = value || fallback;
@@ -22,11 +23,15 @@ module.exports = {
   maxUploadSizeBytes: parseInteger(process.env.MAX_UPLOAD_SIZE_BYTES, 10 * 1024 * 1024),
   minImageWidth: parseInteger(process.env.MIN_IMAGE_WIDTH, 256),
   minImageHeight: parseInteger(process.env.MIN_IMAGE_HEIGHT, 256),
+  imageGenConcurrency: parseInteger(process.env.IMAGE_GEN_CONCURRENCY, 2),
+  rembgConcurrency: parseInteger(process.env.REMBG_CONCURRENCY, 1),
   pipelineMode: process.env.PIPELINE_MODE || "mock",
   bgRemovalProvider: process.env.BG_REMOVAL_PROVIDER || "rembg",
   expressionProvider: process.env.EXPRESSION_PROVIDER || "mock",
   cgProvider: process.env.CG_PROVIDER || "mock",
-  rembgPythonPath: process.env.REMBG_PYTHON_PATH || path.resolve(projectRoot, ".venv/bin/python"),
+  rembgPythonPath:
+    process.env.REMBG_PYTHON_PATH ||
+    (isWindows ? path.resolve(projectRoot, ".venv/Scripts/python.exe") : path.resolve(projectRoot, ".venv/bin/python")),
   rembgScriptPath:
     process.env.REMBG_SCRIPT_PATH || path.resolve(projectRoot, "server/scripts/rembg_remove.py"),
   rembgModel: process.env.REMBG_MODEL || "isnet-anime",
