@@ -14,7 +14,18 @@ const STEP_ORDER = [
 const POLL_INTERVAL_MS = 1000;
 const PERSONAL_GITHUB_URL = "https://github.com/hzagaming";
 const PROJECT_GITHUB_URL = "https://github.com/hzagaming/p2g-character-workflow";
-const APP_VERSION = "1.3.2";
+const APP_VERSION = "1.3.6";
+const API_PRESETS = [
+  {
+    id: "plato",
+    label: {
+      zh: "使用 Plato 模型",
+      en: "Use Plato Model",
+      ja: "Plato モデルを使う",
+      ru: "Использовать модель Plato"
+    }
+  }
+];
 
 const COLOR_STYLES = [
   { id: "cyan", label: { zh: "海蓝", en: "Cyan", ja: "シアン", ru: "Циан" } },
@@ -52,14 +63,229 @@ const STYLE_PRESETS = [
 
 const ANNOUNCEMENTS = [
   {
+    version: "1.3.6",
+    date: "2026-04-09",
+    type: "patch",
+    title: {
+      zh: "1.3.6 合并回退恢复与黑屏修复",
+      en: "1.3.6 Merge Recovery and Blank Screen Fix",
+      ja: "1.3.6 マージ復旧とブラックスクリーン修正",
+      ru: "1.3.6 Восстановление после merge и исправление черного экрана"
+    },
+    summary: {
+      zh: "修复 merge 后导致前端黑屏的回退问题，恢复工作流轮询、并发执行顺序和安装链路的一致性。",
+      en: "Fixes the post-merge regression that caused the frontend blank screen and restores stable polling, staged concurrency, and clean install behavior.",
+      ja: "merge 後にフロントエンドでブラックスクリーンを引き起こした回帰を修正し、ポーリング、段階並行処理、インストール経路の整合性を復元しました。",
+      ru: "Исправляет регрессию после merge, из-за которой фронтенд показывал черный экран, и восстанавливает стабильный polling, поэтапную параллельность и чистую цепочку установки."
+    },
+    bullets: {
+      zh: [
+        "恢复 app.js 的稳定启动主线，修复 merge 回退导致的前端黑屏。",
+        "恢复 API 地址归一化与链式轮询，避免本地开发和静态部署场景下的异常状态。",
+        "恢复表达、CG、表情抠图三阶段并发执行，并继续保留失败可恢复的工作流策略。",
+        "清理 server 包里的错误本地依赖与锁文件残留，统一版本到 1.3.6。"
+      ],
+      en: [
+        "Restores the stable app.js startup path and fixes the merge regression that caused a blank screen.",
+        "Restores API-base normalization and chained polling to avoid invalid states in both local and hosted modes.",
+        "Restores staged concurrency for expressions, CG scenes, and expression cutouts while keeping the workflow resilient to step failures.",
+        "Removes the accidental local dependency from the server package and lockfile, and aligns versions to 1.3.6."
+      ],
+      ja: [
+        "app.js の安定した起動経路を復元し、merge 回帰によるブラックスクリーンを修正しました。",
+        "API ベース URL の正規化と連鎖型ポーリングを戻し、ローカルとホスト環境の両方で不正状態になりにくくしました。",
+        "表情、CG、表情切り抜きの段階並行処理を復元しつつ、ステップ失敗に強いワークフロー方針は維持しています。",
+        "server パッケージに混入した不要なローカル依存と lockfile 残骸を削除し、バージョンを 1.3.6 に統一しました。"
+      ],
+      ru: [
+        "Восстановлен стабильный путь инициализации app.js и исправлен merge-регресс, вызывавший черный экран.",
+        "Возвращены нормализация API base URL и цепочный polling, чтобы избежать невалидных состояний локально и на хостинге.",
+        "Восстановлена поэтапная параллельность для выражений, CG и вырезаний выражений при сохранении устойчивости workflow к ошибкам шагов.",
+        "Удалена случайная локальная зависимость из server package и lockfile, а версии выровнены до 1.3.6."
+      ]
+    }
+  },
+  {
+    version: "1.3.5",
+    date: "2026-04-09",
+    type: "patch",
+    title: {
+      zh: "1.3.5 状态校验与设置稳定性修复",
+      en: "1.3.5 State Validation and Settings Stability Fix",
+      ja: "1.3.5 状態検証と設定安定性の修正",
+      ru: "1.3.5 Исправление проверки состояния и стабильности настроек"
+    },
+    summary: {
+      zh: "继续清理合并后的隐藏问题，补强本地缓存状态校验，并修复设置页模式切换时的潜在异常。",
+      en: "Continues the post-merge cleanup by hardening local-state validation and smoothing out edge cases in the settings mode switches.",
+      ja: "マージ後に残っていた隠れた問題をさらに整理し、ローカル状態の検証を強化、設定モード切替時の例外系を安定化しました。",
+      ru: "Продолжает cleanup после merge: усиливает проверку локального состояния и исправляет пограничные случаи при переключении режимов настроек."
+    },
+    bullets: {
+      zh: [
+        "对语言、明暗模式、配色、样式预设、API 模式和 API 预设统一增加合法值校验。",
+        "旧 localStorage 残值不再轻易把界面带入非法状态。",
+        "默认公告继续跟随当前版本，同时保留 1.3.4 与 1.3.3 在历史公告中。",
+        "重新检查关键前端状态流，修正 merge 后容易被忽略的脆弱点。"
+      ],
+      en: [
+        "Adds validation for language, light or dark mode, accent color, style preset, API mode, and API preset values.",
+        "Stale localStorage values can no longer easily push the UI into an invalid state.",
+        "The default announcement still tracks the current version while keeping 1.3.4 and 1.3.3 in the history.",
+        "Re-checks the critical frontend state flow and fixes fragile merge leftovers."
+      ],
+      ja: [
+        "言語、ライト/ダーク、アクセント色、スタイルプリセット、API モード、API プリセットに妥当値チェックを追加しました。",
+        "古い localStorage の残値で UI が不正状態に入りにくくなりました。",
+        "既定公告は現在バージョンに追従しつつ、1.3.4 と 1.3.3 は履歴に保持されます。",
+        "重要なフロントエンド状態遷移を再点検し、merge 後に見落としやすい脆い箇所を修正しました。"
+      ],
+      ru: [
+        "Добавлена проверка допустимых значений для языка, светлой/темной темы, accent color, style preset, API mode и API preset.",
+        "Устаревшие значения в localStorage больше не так легко переводят UI в невалидное состояние.",
+        "Объявление по умолчанию продолжает следовать текущей версии, при этом 1.3.4 и 1.3.3 остаются в истории.",
+        "Повторно проверен критический поток состояний фронтенда и исправлены хрупкие остатки после merge."
+      ]
+    }
+  },
+  {
+    version: "1.3.4",
+    date: "2026-04-09",
+    type: "patch",
+    title: {
+      zh: "1.3.4 合并收尾与状态修复",
+      en: "1.3.4 Merge Cleanup and State Fixes",
+      ja: "1.3.4 マージ後の整理と状態修正",
+      ru: "1.3.4 Завершение merge и исправление состояния"
+    },
+    summary: {
+      zh: "整理合并后的版本状态，修复设置页状态兜底，并保留 1.3.3 作为历史公告。",
+      en: "Cleans up post-merge version state, hardens settings-state fallbacks, and keeps 1.3.3 in the announcement history.",
+      ja: "マージ後のバージョン状態を整理し、設定ページの状態フォールバックを強化、1.3.3 を履歴公告として保持します。",
+      ru: "Приводит в порядок состояние после merge, усиливает fallback-настройки страницы и сохраняет 1.3.3 в истории объявлений."
+    },
+    bullets: {
+      zh: [
+        "修复合并后版本号、默认公告与界面状态可能不同步的问题。",
+        "对 API 模式、API 预设与样式预设增加合法值兜底，避免旧本地缓存带来异常状态。",
+        "保留 1.3.3 为历史公告，并将 1.3.4 设为当前默认公告。",
+        "再次检查仓库内冲突标记与关键前端逻辑，清理合并收尾问题。"
+      ],
+      en: [
+        "Fixes post-merge mismatches between the version number, default announcement, and UI state.",
+        "Adds safe fallbacks for API mode, API preset, and visual preset values so stale local storage cannot leave the UI in an invalid state.",
+        "Keeps 1.3.3 in the release history while promoting 1.3.4 as the default current announcement.",
+        "Re-checks conflict markers and key frontend logic to finish the merge cleanup cleanly."
+      ],
+      ja: [
+        "マージ後に発生しうる、バージョン番号・既定公告・UI 状態の不一致を修正しました。",
+        "API モード、API プリセット、スタイルプリセットに妥当値のフォールバックを追加し、古いローカル保存値で UI が壊れないようにしました。",
+        "1.3.3 は履歴公告として残し、1.3.4 を現在の既定公告にしました。",
+        "リポジトリ内の競合マーカーと主要フロントエンド処理を再確認し、マージ後の整理を完了しました。"
+      ],
+      ru: [
+        "Исправлены возможные рассинхроны после merge между номером версии, объявлением по умолчанию и состоянием UI.",
+        "Добавлены безопасные fallback-значения для API mode, API preset и визуального пресета, чтобы устаревший local storage не ломал интерфейс.",
+        "Версия 1.3.3 сохранена в истории объявлений, а 1.3.4 назначена текущей основной записью.",
+        "Повторно проверены conflict markers и ключевая логика фронтенда, чтобы аккуратно завершить cleanup после merge."
+      ]
+    }
+  },
+  {
+    version: "1.3.3",
+    date: "2026-04-09",
+    type: "patch",
+    title: {
+      zh: "1.3.3 工作流动效与接口设置修复",
+      en: "1.3.3 Workflow Motion and API Settings Fix",
+      ja: "1.3.3 ワークフロー動作と API 設定の修正",
+      ru: "1.3.3 Исправление анимации workflow и настроек API"
+    },
+    summary: {
+      zh: "移除工作流轮询时反复触发的步骤动画，并补上 Plato 预设 / 自定义 API 的设置模式。",
+      en: "Removes the repeatedly replayed step animation during workflow polling and adds the Plato preset versus custom API settings mode.",
+      ja: "ワークフローのポーリング中に繰り返し再生されていたステップアニメーションを削除し、Plato プリセット / カスタム API の設定モードを追加しました。",
+      ru: "Убрана повторно проигрывающаяся анимация шагов при polling workflow и добавлены режимы настроек Plato preset / custom API."
+    },
+    bullets: {
+      zh: [
+        "工作流运行中不再因为轮询刷新而让步骤卡片重复闪动。",
+        "设置里的接口页新增“使用内置模型”和“自定义 API”两种模式。",
+        "内置 Plato 通道会优先走预设后端，本地开发默认启用，GitHub Pages 上未配置时会明确提示。",
+        "版本默认公告和应用版本号改为同源绑定，减少后续发版遗漏。"
+      ],
+      en: [
+        "Workflow step cards no longer flicker on every polling refresh while a run is in progress.",
+        "The backend settings tab now offers both a built-in model mode and a custom API mode.",
+        "The built-in Plato channel prefers a preset backend, defaults on for local development, and now shows a clearer warning on GitHub Pages when it is not configured.",
+        "The default announcement selection now tracks the app version to reduce future release mismatches."
+      ],
+      ja: [
+        "実行中のポーリング更新で、ステップカードが毎回ちらつく挙動を止めました。",
+        "設定のバックエンド欄に、内蔵モデルモードとカスタム API モードを追加しました。",
+        "内蔵 Plato 通道はプリセット済みバックエンドを優先し、ローカル開発では既定で有効、GitHub Pages では未設定時に明確な案内を表示します。",
+        "デフォルト公告の選択とアプリ版数を同じ基準にそろえ、今後のリリース差し違いを減らしました。"
+      ],
+      ru: [
+        "Карточки шагов workflow больше не мигают при каждом обновлении polling во время выполнения.",
+        "Во вкладке backend в настройках теперь есть два режима: встроенная модель и свой API.",
+        "Встроенный канал Plato теперь предпочитает preset backend, по умолчанию включается локально и понятнее сообщает о незаданной конфигурации на GitHub Pages.",
+        "Выбор объявления по умолчанию теперь привязан к версии приложения, чтобы уменьшить ошибки в будущих релизах."
+      ]
+    }
+  },
+  {
     version: "1.3.2",
     date: "2026-04-08",
     type: "patch",
     title: {
-      zh: "1.3.2 下载与输出体验更新",
-      en: "1.3.2 Download and Output UX Update",
-      ja: "1.3.2 ダウンロードと出力体験の更新",
-      ru: "1.3.2 Обновление скачивания и вывода"
+      zh: "1.3.2 GitHub Pages 接口修复",
+      en: "1.3.2 GitHub Pages API Fix",
+      ja: "1.3.2 GitHub Pages API 修正",
+      ru: "1.3.2 Исправление API для GitHub Pages"
+    },
+    summary: {
+      zh: "修复 GitHub Pages 场景下误请求同源 /api 的问题，并补充独立后端部署说明。",
+      en: "Fixes the GitHub Pages same-origin /api mistake and adds clearer hosted-backend deployment guidance.",
+      ja: "GitHub Pages 上で同一オリジン /api を誤って叩く問題を修正し、独立バックエンドの配置手順を追記しました。",
+      ru: "Исправлена ошибочная отправка запросов на same-origin /api на GitHub Pages и добавлены более понятные инструкции по размещению отдельного бэкенда."
+    },
+    bullets: {
+      zh: [
+        "GitHub Pages 环境下如果未配置 API 地址，前端会直接拦截并提示，不再发出必然失败的 /api 请求。",
+        "设置面板的接口页会明确提示需要填写独立后端地址。",
+        "支持通过 URL 参数 api=https://your-backend.example.com 预填后端地址。",
+        "README、server README 和 .env 示例补充了 GitHub Pages 加独立后端的部署说明。"
+      ],
+      en: [
+        "When running on GitHub Pages without an API endpoint configured, the frontend now blocks workflow submission instead of sending a doomed /api request.",
+        "The backend tab in Settings now clearly explains that a separately hosted backend URL is required.",
+        "You can now prefill the backend with a URL parameter like api=https://your-backend.example.com.",
+        "README, server README, and the env example now document the GitHub Pages plus hosted-backend deployment flow."
+      ],
+      ja: [
+        "GitHub Pages 上で API アドレス未設定の場合、失敗確定の /api リクエストを送らずにフロントエンド側で案内します。",
+        "設定のバックエンド欄で、独立してホストしたバックエンド URL が必要だと明確に表示します。",
+        "api=https://your-backend.example.com のような URL パラメータでバックエンドを事前指定できます。",
+        "README、server README、.env 例に GitHub Pages と独立バックエンドの構成手順を追記しました。"
+      ],
+      ru: [
+        "Если сайт работает на GitHub Pages и API endpoint не задан, фронтенд теперь заранее останавливает запуск workflow вместо заведомо неудачного запроса к /api.",
+        "Во вкладке бэкенда в настройках теперь явно указано, что нужен отдельно размещенный backend URL.",
+        "Теперь можно заранее передать backend через URL-параметр вида api=https://your-backend.example.com.",
+        "README, server README и пример env дополнены инструкцией по схеме GitHub Pages + отдельный бэкенд."
+      ]
+    }
+  },
+  {
+    version: "1.3.1",
+    date: "2026-04-08",
+    type: "patch",
+    title: {
+      zh: "1.3.1 下载与输出体验更新",
+      en: "1.3.1 Download and Output UX Update",
+      ja: "1.3.1 ダウンロードと出力体験の更新",
+      ru: "1.3.1 Обновление скачивания и вывода"
     },
     summary: {
       zh: "目标输出更新为 8 个，为每个产出补充下载与复制按钮，并支持一键打包下载全部结果。",
@@ -921,17 +1147,13 @@ function normalizeApiBase(value) {
     const portNumber = Number.parseInt(port, 10);
     const isViteDevPort = Number.isFinite(portNumber) && portNumber >= 5173 && portNumber <= 5199;
 
-    // If the app is served by Vite dev server, default to the backend port instead of same-origin.
-    if (isViteDevPort) {
-      if (!raw || raw === origin) {
-        return "http://localhost:3001";
-      }
+    if (isViteDevPort && (!raw || raw === origin)) {
+      return "http://localhost:3001";
     }
   }
 
   return raw;
 }
-
 const state = {
   selectedFile: null,
   workflow: null,
@@ -943,8 +1165,10 @@ const state = {
   mode: readStoredValue("cwa-mode", "dark"),
   accent: readStoredValue("cwa-accent", "cyan"),
   visualPreset: readStoredValue("cwa-visual-preset", "default"),
+  apiMode: readStoredValue("cwa-api-mode", defaultLocalApiBase() ? "preset" : "custom"),
+  apiPreset: readStoredValue("cwa-api-preset", "plato"),
   apiBase: normalizeApiBase(readStoredValue("cwa-api-base", defaultApiBase())),
-  selectedAnnouncement: "1.3.2",
+  selectedAnnouncement: APP_VERSION,
   copiedErrorKey: "",
   copiedActionKey: "",
   copyPayloads: {}
@@ -1113,6 +1337,7 @@ async function fetchWorkflow(workflowId, t) {
 
 function applyAppearance() {
   normalizeStateSelections();
+  state.apiBase = normalizeApiBase(state.apiBase);
   const preset = STYLE_PRESETS.some((item) => item.id === state.visualPreset) ? state.visualPreset : "default";
 
   state.visualPreset = preset;
@@ -1185,9 +1410,8 @@ function startPollingIfNeeded() {
       const latest = await fetchWorkflow(workflowId, t);
       const latestUpdatedAt = latest?.updated_at || latest?.generated_at || "";
       const hasChanged =
-        latestUpdatedAt && latestUpdatedAt !== lastWorkflowUpdatedAt
-          ? true
-          : JSON.stringify(latest) !== JSON.stringify(state.workflow);
+        (latestUpdatedAt && latestUpdatedAt !== lastWorkflowUpdatedAt) ||
+        JSON.stringify(latest) !== JSON.stringify(state.workflow);
 
       if (hasChanged) {
         lastWorkflowUpdatedAt = latestUpdatedAt || lastWorkflowUpdatedAt;
@@ -1749,6 +1973,7 @@ async function handleSubmit(event) {
 
     const created = await startWorkflow(state.selectedFile, t);
     state.workflow = created;
+    lastWorkflowUpdatedAt = created?.updated_at || created?.generated_at || "";
     setMessage(
       "info",
       state.language === "zh"

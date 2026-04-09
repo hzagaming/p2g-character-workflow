@@ -187,7 +187,7 @@ CG_PROVIDER=plato
 REMBG_PYTHON_PATH=./.venv/bin/python
 REMBG_SCRIPT_PATH=./server/scripts/rembg_remove.py
 PLATO_API_KEY=sk-your-key
-PLATO_BASE_URL=https://api.bltcy.ai/v1/chat/completions
+PLATO_BASE_URL=https://api.bltcy.ai/v1
 PLATO_MODEL=gemini-3.1-flash-image-preview
 ```
 

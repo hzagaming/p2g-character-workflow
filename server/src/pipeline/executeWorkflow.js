@@ -19,6 +19,7 @@ const {
   getMimeTypeFromPath
 } = require("../services/providerRegistry");
 const { formatErrorDetails } = require("../utils/errors");
+const { asyncPool } = require("../utils/asyncPool");
 
 function toPublicOutputUrl(workflowId, fileName) {
   return `/outputs/${workflowId}/${fileName}`;
@@ -86,6 +87,7 @@ async function runStep(workflowId, stepName, provider, runFn, onSuccess, options
       provider,
       debug: detailed.debug
     });
+
     if (fatal) {
       setWorkflowStatus(workflowId, "failed", stepName, detailed.message, detailed.debug);
       throw error;
@@ -147,85 +149,7 @@ async function executeWorkflow(workflowId, config) {
     };
     const successfulExpressionArtifacts = {};
 
-    // Two independent queues:
-    // - Web image generation (Plato/Banana/etc): unlimited concurrency (no limiter).
-    // - Local python post-processing (rembg): separate queue, typically concurrency=1.
-    let rembgActive = 0;
-    const rembgQueue = [];
-
-    async function runRembgQueued(taskFn) {
-      const limit = Math.max(1, Number.parseInt(String(config.rembgConcurrency ?? 1), 10) || 1);
-      if (rembgActive >= limit) {
-        await new Promise((resolve) => rembgQueue.push(resolve));
-      }
-      rembgActive += 1;
-      try {
-        return await taskFn();
-      } finally {
-        rembgActive -= 1;
-        const next = rembgQueue.shift();
-        if (next) {
-          next();
-        }
-      }
-    }
-
-    async function enqueueCutout(expressionName) {
-      const stepName = `cutout_expression_${expressionName}`;
-      const sourceArtifact = successfulExpressionArtifacts[expressionName];
-
-      if (!sourceArtifact?.outputPath) {
-        await skipStep(
-          workflowId,
-          outputDir,
-          promptPack,
-          stepName,
-          backgroundRemovalRunner.provider,
-          `Skipped because ${expressionMap[expressionName]} failed, so no expression image was available for cutout.`,
-          {
-            dependency_step: expressionMap[expressionName],
-            reason: "missing_expression_output"
-          }
-        );
-        return null;
-      }
-
-      return runRembgQueued(() =>
-        runStep(
-          workflowId,
-          stepName,
-          backgroundRemovalRunner.provider,
-          async () =>
-            backgroundRemovalRunner.run({
-              config,
-              sourcePath: sourceArtifact.outputPath,
-              sourceMimeType: sourceArtifact.mimeType,
-              destinationPath: path.join(outputDir, `expression-${expressionName}-cutout.png`),
-              prompt: promptPack.expression_cutouts.prompt
-            }),
-          async (_result, outputUrl) => {
-            mergeWorkflowOutputs(workflowId, {
-              expression_cutouts: {
-                [expressionName]: outputUrl
-              },
-              providers: {
-                remove_background: backgroundRemovalRunner.provider
-              }
-            });
-            await writeManifestSnapshot(workflowId, outputDir, promptPack);
-          },
-          {
-            fatal: false,
-            updateCurrentStep: false
-          }
-        )
-      );
-    }
-
-    setWorkflowStatus(workflowId, "running", "web_image_gen", null, null);
-
-    const cutoutPromises = [];
-    const expressionPromises = Object.entries(expressionMap).map(async ([expressionName, stepName]) => {
+    const expressionTasks = Object.entries(expressionMap).map(([expressionName, stepName]) => async () => {
       const expressionPrompt = await getExpressionPrompt(expressionName);
       promptPack.expressions[expressionName] = expressionPrompt;
 
@@ -255,9 +179,6 @@ async function executeWorkflow(workflowId, config) {
             }
           });
           await writeManifestSnapshot(workflowId, outputDir, promptPack);
-
-          // As soon as an expression image exists, enqueue cutout on the local queue.
-          cutoutPromises.push(enqueueCutout(expressionName));
         },
         {
           fatal: false,
@@ -267,22 +188,24 @@ async function executeWorkflow(workflowId, config) {
 
       if (!expressionResult) {
         successfulExpressionArtifacts[expressionName] = null;
-        cutoutPromises.push(enqueueCutout(expressionName));
+        await writeManifestSnapshot(workflowId, outputDir, promptPack);
       }
 
       return expressionResult;
     });
 
+    await asyncPool(expressionTasks, config.imageGenConcurrency);
+
     const cgPromptEntries = await getCgPrompts();
 
-    const cgPromises = [
+    const cgTasks = [
       ["cg_01", "cg-01.png"],
       ["cg_02", "cg-02.png"]
-    ].map(async ([stepName, outputName], index) => {
+    ].map(([stepName, outputName], index) => async () => {
       const cgPromptEntry = cgPromptEntries[index];
       promptPack.cg[index] = cgPromptEntry;
 
-      return runStep(
+      const cgResult = await runStep(
         workflowId,
         stepName,
         cgRunner.provider,
@@ -311,11 +234,75 @@ async function executeWorkflow(workflowId, config) {
           updateCurrentStep: false
         }
       );
+
+      if (!cgResult) {
+        await writeManifestSnapshot(workflowId, outputDir, promptPack);
+      }
+
+      return cgResult;
     });
 
-    // Web API generation runs concurrently (unlimited). Local rembg runs via its own queue concurrently with web tasks.
-    await Promise.allSettled([...expressionPromises, ...cgPromises]);
-    await Promise.allSettled(cutoutPromises);
+    await asyncPool(cgTasks, config.imageGenConcurrency);
+
+    const cutoutTasks = [
+      ["thinking", "cutout_expression_thinking"],
+      ["surprise", "cutout_expression_surprise"],
+      ["angry", "cutout_expression_angry"]
+    ].map(([expressionName, stepName]) => async () => {
+      const sourceArtifact = successfulExpressionArtifacts[expressionName];
+
+      if (!sourceArtifact?.outputPath) {
+        await skipStep(
+          workflowId,
+          outputDir,
+          promptPack,
+          stepName,
+          backgroundRemovalRunner.provider,
+          `Skipped because ${expressionMap[expressionName]} failed, so no expression image was available for cutout.`,
+          {
+            dependency_step: expressionMap[expressionName],
+            reason: "missing_expression_output"
+          }
+        );
+        return null;
+      }
+
+      const cutoutResult = await runStep(
+        workflowId,
+        stepName,
+        backgroundRemovalRunner.provider,
+        async () =>
+          backgroundRemovalRunner.run({
+            config,
+            sourcePath: sourceArtifact.outputPath,
+            sourceMimeType: sourceArtifact.mimeType,
+            destinationPath: path.join(outputDir, `expression-${expressionName}-cutout.png`),
+            prompt: promptPack.expression_cutouts.prompt
+          }),
+        async (_result, outputUrl) => {
+          mergeWorkflowOutputs(workflowId, {
+            expression_cutouts: {
+              [expressionName]: outputUrl
+            },
+            providers: {
+              remove_background: backgroundRemovalRunner.provider
+            }
+          });
+          await writeManifestSnapshot(workflowId, outputDir, promptPack);
+        },
+        {
+          fatal: false
+        }
+      );
+
+      if (!cutoutResult) {
+        await writeManifestSnapshot(workflowId, outputDir, promptPack);
+      }
+
+      return cutoutResult;
+    });
+
+    await asyncPool(cutoutTasks, config.rembgConcurrency);
 
     const currentWorkflow = getWorkflow(workflowId);
     const failedOrSkippedSteps = Object.entries(currentWorkflow.steps).filter(([, step]) =>

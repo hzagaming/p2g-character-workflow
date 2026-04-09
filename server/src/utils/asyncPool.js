@@ -1,33 +1,27 @@
 function parseConcurrency(value, fallback) {
-  const n = Number.parseInt(String(value ?? ""), 10);
-  if (!Number.isFinite(n) || Number.isNaN(n)) {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(parsed) || Number.isNaN(parsed)) {
     return fallback;
   }
-  return Math.max(1, n);
+
+  return Math.max(1, parsed);
 }
 
-/**
- * Runs async tasks with a concurrency limit.
- *
- * @template T
- * @param {Array<() => Promise<T>>} tasks
- * @param {number} concurrency
- * @returns {Promise<T[]>}
- */
 async function asyncPool(tasks, concurrency) {
   const limit = parseConcurrency(concurrency, 1);
   const results = new Array(tasks.length);
-
   let nextIndex = 0;
 
   async function worker() {
     while (true) {
-      const current = nextIndex;
+      const currentIndex = nextIndex;
       nextIndex += 1;
-      if (current >= tasks.length) {
+
+      if (currentIndex >= tasks.length) {
         return;
       }
-      results[current] = await tasks[current]();
+
+      results[currentIndex] = await tasks[currentIndex]();
     }
   }
 
@@ -39,4 +33,3 @@ async function asyncPool(tasks, concurrency) {
 module.exports = {
   asyncPool
 };
-
