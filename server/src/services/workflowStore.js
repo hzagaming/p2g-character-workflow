@@ -7,6 +7,7 @@ const store = new Map();
 
 const WORKFLOW_STEPS = [
   "validate_input",
+  "analyze_character",
   "expression_thinking",
   "expression_surprise",
   "expression_angry",
@@ -47,6 +48,12 @@ function makeStepMap() {
 function makeOutputShape() {
   return {
     manifest: null,
+    meta_files: {
+      character_profile: null,
+      prompts: null,
+      character_pack: null,
+      p2g_handoff: null
+    },
     providers: {
       remove_background: null,
       expressions: null,
@@ -77,6 +84,10 @@ function mergeOutputShape(current, patch) {
   return {
     ...base,
     ...patch,
+    meta_files: {
+      ...base.meta_files,
+      ...(patch.meta_files || {})
+    },
     providers: {
       ...base.providers,
       ...(patch.providers || {})

@@ -1,6 +1,7 @@
 
 const STEP_ORDER = [
   "validate_input",
+  "analyze_character",
   "expression_thinking",
   "expression_surprise",
   "expression_angry",
@@ -14,7 +15,7 @@ const STEP_ORDER = [
 const POLL_INTERVAL_MS = 1000;
 const PERSONAL_GITHUB_URL = "https://github.com/hzagaming";
 const PROJECT_GITHUB_URL = "https://github.com/hzagaming/p2g-character-workflow";
-const APP_VERSION = "1.3.6";
+const APP_VERSION = "1.4.0";
 const API_PRESETS = [
   {
     id: "plato",
@@ -62,6 +63,49 @@ const STYLE_PRESETS = [
 ];
 
 const ANNOUNCEMENTS = [
+  {
+    version: "1.4.0",
+    date: "2026-04-11",
+    type: "feature",
+    title: {
+      zh: "1.4.0 角色理解与 p2g 交接层",
+      en: "1.4.0 Character Understanding and p2g Handoff",
+      ja: "1.4.0 キャラクター理解と p2g ハンドオフ",
+      ru: "1.4.0 Понимание персонажа и слой передачи в p2g"
+    },
+    summary: {
+      zh: "新增角色理解步骤、角色卡与交接文件，让当前仓库正式收敛到“系列素材生成 + prompt/LLM/TTS 封装 + 交给 p2g”的方向。",
+      en: "Adds a character-understanding step, structured character outputs, and a p2g handoff file so the repo now clearly focuses on series asset generation plus prompt, LLM, and TTS packaging for p2g.",
+      ja: "キャラクター理解ステップ、構造化キャラクター出力、p2g ハンドオフファイルを追加し、このリポジトリの焦点を“シリーズ素材生成 + prompt/LLM/TTS 封装 + p2g 連携”へ明確に絞りました。",
+      ru: "Добавлены шаг понимания персонажа, структурированные артефакты персонажа и файл передачи в p2g, чтобы репозиторий четко сфокусировался на генерации серийных ассетов и упаковке prompt/LLM/TTS для p2g."
+    },
+    bullets: {
+      zh: [
+        "工作流新增 analyze_character 步骤，在生成前先沉淀角色理解信息。",
+        "新增 character-profile.json、prompts.json、character-pack.json 与 p2g-handoff.json 输出。",
+        "prompt compiler 正式进入主管线，表情与 CG 提示词由角色信息和场景策略编译生成。",
+        "README 已重写为当前阶段的总说明，明确本仓库只负责系列素材、prompt/LLM/TTS 封装与 p2g 交接。"
+      ],
+      en: [
+        "Adds the analyze_character step so character understanding is captured before generation begins.",
+        "Adds character-profile.json, prompts.json, character-pack.json, and p2g-handoff.json as first-class workflow outputs.",
+        "Moves the prompt compiler into the main pipeline so expression and CG prompts are compiled from character context and scene strategy.",
+        "Rewrites the README as the current source of truth and narrows the repo scope to series assets, prompt/LLM/TTS packaging, and p2g handoff."
+      ],
+      ja: [
+        "生成前にキャラクター理解を記録する analyze_character ステップを追加しました。",
+        "character-profile.json、prompts.json、character-pack.json、p2g-handoff.json を正式なワークフロー出力として追加しました。",
+        "prompt compiler を主管線に組み込み、表情と CG のプロンプトをキャラクター文脈とシーン戦略から生成するようにしました。",
+        "README を現段階の正式な指針として書き直し、このリポジトリの担当範囲をシリーズ素材、prompt/LLM/TTS 封装、p2g 受け渡しに絞りました。"
+      ],
+      ru: [
+        "Добавлен шаг analyze_character, чтобы фиксировать понимание персонажа до начала генерации.",
+        "Добавлены character-profile.json, prompts.json, character-pack.json и p2g-handoff.json как полноценные артефакты workflow.",
+        "Prompt compiler включен в основной пайплайн, и теперь prompts для эмоций и CG собираются из контекста персонажа и сценической стратегии.",
+        "README переписан как актуальный источник истины и сужает зону ответственности репозитория до серийных ассетов, упаковки prompt/LLM/TTS и передачи в p2g."
+      ]
+    }
+  },
   {
     version: "1.3.6",
     date: "2026-04-09",
@@ -644,6 +688,10 @@ const UI = {
     noOutputs: "暂无输出，步骤一旦成功就会立即显示。",
     manifest: "结果清单",
     openManifest: "打开 manifest.json",
+    openProfile: "打开 character-profile.json",
+    openPrompts: "打开 prompts.json",
+    openCharacterPack: "打开 character-pack.json",
+    openP2gHandoff: "打开 p2g-handoff.json",
     openFile: "打开文件",
     downloadFile: "下载",
     copyAsset: "复制",
@@ -668,6 +716,7 @@ const UI = {
     copied: "已复制",
     stepLabels: {
       validate_input: "输入校验",
+      analyze_character: "角色理解",
       expression_thinking: "思考表情",
       expression_surprise: "惊讶表情",
       expression_angry: "生气表情",
@@ -723,6 +772,10 @@ const UI = {
     noOutputs: "No outputs yet. The first finished step will appear immediately.",
     manifest: "Result Manifest",
     openManifest: "Open manifest.json",
+    openProfile: "Open character-profile.json",
+    openPrompts: "Open prompts.json",
+    openCharacterPack: "Open character-pack.json",
+    openP2gHandoff: "Open p2g-handoff.json",
     openFile: "Open file",
     downloadFile: "Download",
     copyAsset: "Copy",
@@ -747,6 +800,7 @@ const UI = {
     copied: "Copied",
     stepLabels: {
       validate_input: "Validate Input",
+      analyze_character: "Character Understanding",
       expression_thinking: "Thinking Expression",
       expression_surprise: "Surprise Expression",
       expression_angry: "Angry Expression",
@@ -802,6 +856,10 @@ const UI = {
     noOutputs: "まだ出力はありません。最初に成功したステップからすぐ表示されます。",
     manifest: "結果マニフェスト",
     openManifest: "manifest.json を開く",
+    openProfile: "character-profile.json を開く",
+    openPrompts: "prompts.json を開く",
+    openCharacterPack: "character-pack.json を開く",
+    openP2gHandoff: "p2g-handoff.json を開く",
     openFile: "ファイルを開く",
     downloadFile: "ダウンロード",
     copyAsset: "コピー",
@@ -826,6 +884,7 @@ const UI = {
     copied: "コピー済み",
     stepLabels: {
       validate_input: "入力検証",
+      analyze_character: "キャラクター理解",
       expression_thinking: "思考表情",
       expression_surprise: "驚き表情",
       expression_angry: "怒り表情",
@@ -881,6 +940,10 @@ const UI = {
     noOutputs: "Пока результатов нет. Первый успешный шаг появится сразу.",
     manifest: "Манифест результата",
     openManifest: "Открыть manifest.json",
+    openProfile: "Открыть character-profile.json",
+    openPrompts: "Открыть prompts.json",
+    openCharacterPack: "Открыть character-pack.json",
+    openP2gHandoff: "Открыть p2g-handoff.json",
     openFile: "Открыть файл",
     downloadFile: "Скачать",
     copyAsset: "Копировать",
@@ -905,6 +968,7 @@ const UI = {
     copied: "Скопировано",
     stepLabels: {
       validate_input: "Проверка входа",
+      analyze_character: "Понимание персонажа",
       expression_thinking: "Выражение: раздумье",
       expression_surprise: "Выражение: удивление",
       expression_angry: "Выражение: злость",
@@ -1879,6 +1943,10 @@ function renderApp() {
             ${outputs?.manifest ? `
               <div class="output-toolbar">
                 ${outputs?.manifest ? `<button type="button" class="choice link-button" data-action="open-asset" data-url="${escapeHtml(outputs.manifest)}">${escapeHtml(t.openManifest)}</button>` : ""}
+                ${outputs?.meta_files?.character_profile ? `<button type="button" class="choice link-button" data-action="open-asset" data-url="${escapeHtml(outputs.meta_files.character_profile)}">${escapeHtml(t.openProfile)}</button>` : ""}
+                ${outputs?.meta_files?.prompts ? `<button type="button" class="choice link-button" data-action="open-asset" data-url="${escapeHtml(outputs.meta_files.prompts)}">${escapeHtml(t.openPrompts)}</button>` : ""}
+                ${outputs?.meta_files?.character_pack ? `<button type="button" class="choice link-button" data-action="open-asset" data-url="${escapeHtml(outputs.meta_files.character_pack)}">${escapeHtml(t.openCharacterPack)}</button>` : ""}
+                ${outputs?.meta_files?.p2g_handoff ? `<button type="button" class="choice link-button" data-action="open-asset" data-url="${escapeHtml(outputs.meta_files.p2g_handoff)}">${escapeHtml(t.openP2gHandoff)}</button>` : ""}
                 ${workflow?.id ? `<button type="button" class="choice link-button" data-action="download-all">${escapeHtml(t.downloadAll)}</button>` : ""}
               </div>` : ""}
 

@@ -9,9 +9,13 @@ const {
 } = require("../services/workflowStore");
 const {
   createBackgroundRemovalPrompt,
-  getCgPrompts,
-  getExpressionPrompt
+  getExpressionPrompt,
+  getPromptPack
 } = require("../services/promptLoader");
+const { createBootstrapCharacterProfile } = require("../services/characterProfile");
+const { analyzeCharacterReference } = require("../services/characterUnderstanding");
+const { buildCharacterPackSnapshot } = require("../services/characterPack");
+const { buildP2gHandoff } = require("../services/p2gHandoff");
 const {
   getBackgroundRemovalRunner,
   getCgRunner,
@@ -25,31 +29,123 @@ function toPublicOutputUrl(workflowId, fileName) {
   return `/outputs/${workflowId}/${fileName}`;
 }
 
-async function writeManifestSnapshot(workflowId, outputDir, promptPack) {
+async function writeJsonArtifact(workflowId, outputDir, fileName, payload) {
+  await fs.writeFile(path.join(outputDir, fileName), JSON.stringify(payload, null, 2), "utf8");
+  return toPublicOutputUrl(workflowId, fileName);
+}
+
+async function writeWorkflowSnapshots(workflowId, outputDir, characterProfile, promptPack) {
   const workflow = getWorkflow(workflowId);
   if (!workflow) {
     return null;
   }
 
+  if (characterProfile) {
+    const characterProfileUrl = await writeJsonArtifact(
+      workflowId,
+      outputDir,
+      "character-profile.json",
+      characterProfile
+    );
+
+    mergeWorkflowOutputs(workflowId, {
+      meta_files: {
+        character_profile: characterProfileUrl
+      }
+    });
+  }
+
+  if (promptPack) {
+    const promptsUrl = await writeJsonArtifact(workflowId, outputDir, "prompts.json", promptPack);
+    mergeWorkflowOutputs(workflowId, {
+      meta_files: {
+        prompts: promptsUrl
+      }
+    });
+  }
+
+  const currentWorkflow = getWorkflow(workflowId);
   const manifest = {
     workflow_id: workflowId,
-    status: workflow.status,
-    current_step: workflow.current_step,
+    status: currentWorkflow.status,
+    current_step: currentWorkflow.current_step,
     generated_at: new Date().toISOString(),
-    error: workflow.error,
-    error_details: workflow.error_details,
-    steps: workflow.steps,
+    error: currentWorkflow.error,
+    error_details: currentWorkflow.error_details,
+    steps: currentWorkflow.steps,
+    character_profile: characterProfile,
     prompts: promptPack,
-    outputs: workflow.outputs
+    outputs: currentWorkflow.outputs
   };
 
   const manifestFileName = "manifest.json";
-  await fs.writeFile(path.join(outputDir, manifestFileName), JSON.stringify(manifest, null, 2), "utf8");
+  const manifestUrl = await writeJsonArtifact(workflowId, outputDir, manifestFileName, manifest);
   mergeWorkflowOutputs(workflowId, {
-    manifest: toPublicOutputUrl(workflowId, manifestFileName)
+    manifest: manifestUrl
   });
 
-  return manifest;
+  const workflowAfterManifest = getWorkflow(workflowId);
+  const predictedCharacterPackUrl = toPublicOutputUrl(workflowId, "character-pack.json");
+  const predictedP2gHandoffUrl = toPublicOutputUrl(workflowId, "p2g-handoff.json");
+  const characterPack = buildCharacterPackSnapshot({
+    workflow: {
+      ...workflowAfterManifest,
+      outputs: {
+        ...workflowAfterManifest.outputs,
+        meta_files: {
+          ...(workflowAfterManifest.outputs?.meta_files || {}),
+          character_pack: predictedCharacterPackUrl,
+          p2g_handoff: predictedP2gHandoffUrl
+        }
+      }
+    },
+    characterProfile,
+    promptPack
+  });
+  const characterPackUrl = await writeJsonArtifact(
+    workflowId,
+    outputDir,
+    "character-pack.json",
+    characterPack
+  );
+  mergeWorkflowOutputs(workflowId, {
+    meta_files: {
+      character_pack: characterPackUrl
+    }
+  });
+
+  const workflowAfterCharacterPack = getWorkflow(workflowId);
+  const p2gHandoff = buildP2gHandoff({
+    workflow: {
+      ...workflowAfterCharacterPack,
+      outputs: {
+        ...workflowAfterCharacterPack.outputs,
+        meta_files: {
+          ...(workflowAfterCharacterPack.outputs?.meta_files || {}),
+          p2g_handoff: predictedP2gHandoffUrl
+        }
+      }
+    },
+    characterProfile,
+    promptPack
+  });
+  const p2gHandoffUrl = await writeJsonArtifact(
+    workflowId,
+    outputDir,
+    "p2g-handoff.json",
+    p2gHandoff
+  );
+  mergeWorkflowOutputs(workflowId, {
+    meta_files: {
+      p2g_handoff: p2gHandoffUrl
+    }
+  });
+
+  return {
+    manifest,
+    characterPack,
+    p2gHandoff
+  };
 }
 
 async function runStep(workflowId, stepName, provider, runFn, onSuccess, options = {}) {
@@ -97,13 +193,13 @@ async function runStep(workflowId, stepName, provider, runFn, onSuccess, options
   }
 }
 
-async function skipStep(workflowId, outputDir, promptPack, stepName, provider, message, debug = null) {
+async function skipStep(workflowId, outputDir, characterProfile, promptPack, stepName, provider, message, debug = null) {
   markStepStatus(workflowId, stepName, "skipped", message, {
     provider,
     debug
   });
   setWorkflowStatus(workflowId, "running", stepName, null, null);
-  await writeManifestSnapshot(workflowId, outputDir, promptPack);
+  await writeWorkflowSnapshots(workflowId, outputDir, characterProfile, promptPack);
 }
 
 async function executeWorkflow(workflowId, config) {
@@ -112,14 +208,8 @@ async function executeWorkflow(workflowId, config) {
     return null;
   }
 
-  const promptPack = {
-    expressions: {},
-    cg: [],
-    expression_cutouts: {
-      provider: config.bgRemovalProvider,
-      prompt: createBackgroundRemovalPrompt()
-    }
-  };
+  let characterProfile = null;
+  let promptPack = null;
 
   try {
     const originalSourcePath = workflow.source_image.upload_path;
@@ -140,7 +230,31 @@ async function executeWorkflow(workflowId, config) {
     });
 
     await runStep(workflowId, "validate_input", "system", async () => true);
-    await writeManifestSnapshot(workflowId, outputDir, promptPack);
+    characterProfile = createBootstrapCharacterProfile(workflow);
+    await runStep(
+      workflowId,
+      "analyze_character",
+      "system",
+      async () => {
+        characterProfile = analyzeCharacterReference(workflow, characterProfile);
+        return {
+          debug: {
+            profile_stage: characterProfile.profile_stage,
+            framing: characterProfile.analysis?.framing || null,
+            reference_strength: characterProfile.analysis?.reference_strength || null
+          }
+        };
+      },
+      async () => {
+        await writeWorkflowSnapshots(workflowId, outputDir, characterProfile, promptPack);
+      }
+    );
+    promptPack = await getPromptPack(characterProfile);
+    promptPack.expression_cutouts = {
+      provider: config.bgRemovalProvider,
+      prompt: createBackgroundRemovalPrompt()
+    };
+    await writeWorkflowSnapshots(workflowId, outputDir, characterProfile, promptPack);
 
     const expressionMap = {
       thinking: "expression_thinking",
@@ -150,8 +264,9 @@ async function executeWorkflow(workflowId, config) {
     const successfulExpressionArtifacts = {};
 
     const expressionTasks = Object.entries(expressionMap).map(([expressionName, stepName]) => async () => {
-      const expressionPrompt = await getExpressionPrompt(expressionName);
-      promptPack.expressions[expressionName] = expressionPrompt;
+      const expressionPrompt =
+        promptPack?.expressions?.[expressionName] ||
+        (await getExpressionPrompt(expressionName, characterProfile));
 
       const expressionResult = await runStep(
         workflowId,
@@ -178,7 +293,7 @@ async function executeWorkflow(workflowId, config) {
               expressions: expressionRunner.provider
             }
           });
-          await writeManifestSnapshot(workflowId, outputDir, promptPack);
+          await writeWorkflowSnapshots(workflowId, outputDir, characterProfile, promptPack);
         },
         {
           fatal: false,
@@ -188,7 +303,7 @@ async function executeWorkflow(workflowId, config) {
 
       if (!expressionResult) {
         successfulExpressionArtifacts[expressionName] = null;
-        await writeManifestSnapshot(workflowId, outputDir, promptPack);
+        await writeWorkflowSnapshots(workflowId, outputDir, characterProfile, promptPack);
       }
 
       return expressionResult;
@@ -196,7 +311,7 @@ async function executeWorkflow(workflowId, config) {
 
     await asyncPool(expressionTasks, config.imageGenConcurrency);
 
-    const cgPromptEntries = await getCgPrompts();
+    const cgPromptEntries = promptPack.cg || [];
 
     const cgTasks = [
       ["cg_01", "cg-01.png"],
@@ -227,7 +342,7 @@ async function executeWorkflow(workflowId, config) {
               cg: cgRunner.provider
             }
           });
-          await writeManifestSnapshot(workflowId, outputDir, promptPack);
+          await writeWorkflowSnapshots(workflowId, outputDir, characterProfile, promptPack);
         },
         {
           fatal: false,
@@ -236,7 +351,7 @@ async function executeWorkflow(workflowId, config) {
       );
 
       if (!cgResult) {
-        await writeManifestSnapshot(workflowId, outputDir, promptPack);
+        await writeWorkflowSnapshots(workflowId, outputDir, characterProfile, promptPack);
       }
 
       return cgResult;
@@ -255,6 +370,7 @@ async function executeWorkflow(workflowId, config) {
         await skipStep(
           workflowId,
           outputDir,
+          characterProfile,
           promptPack,
           stepName,
           backgroundRemovalRunner.provider,
@@ -288,7 +404,7 @@ async function executeWorkflow(workflowId, config) {
               remove_background: backgroundRemovalRunner.provider
             }
           });
-          await writeManifestSnapshot(workflowId, outputDir, promptPack);
+          await writeWorkflowSnapshots(workflowId, outputDir, characterProfile, promptPack);
         },
         {
           fatal: false
@@ -296,7 +412,7 @@ async function executeWorkflow(workflowId, config) {
       );
 
       if (!cutoutResult) {
-        await writeManifestSnapshot(workflowId, outputDir, promptPack);
+        await writeWorkflowSnapshots(workflowId, outputDir, characterProfile, promptPack);
       }
 
       return cutoutResult;
@@ -336,13 +452,13 @@ async function executeWorkflow(workflowId, config) {
     } else {
       setWorkflowStatus(workflowId, "completed", "done", null, null);
     }
-    await writeManifestSnapshot(workflowId, outputDir, promptPack);
+    await writeWorkflowSnapshots(workflowId, outputDir, characterProfile, promptPack);
   } catch (error) {
     const currentWorkflow = getWorkflow(workflowId);
     const outputDir = path.join(config.outputDir, workflowId);
 
     if (currentWorkflow) {
-      await writeManifestSnapshot(workflowId, outputDir, promptPack).catch(() => null);
+      await writeWorkflowSnapshots(workflowId, outputDir, characterProfile, promptPack).catch(() => null);
     }
   }
 
